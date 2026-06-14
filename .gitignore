@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.key
+*.pages
+*.heic
+*.dmg

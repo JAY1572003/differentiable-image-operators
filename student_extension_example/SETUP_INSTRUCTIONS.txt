@@ -1,0 +1,127 @@
+================================================================================
+SETUP INSTRUCTIONS FOR STUDENTS
+================================================================================
+
+This folder is a minimal example for extending differentiable operators.
+
+QUICK START (2 steps):
+================================================================================
+
+1. VERIFY YOUR ENVIRONMENT HAS PYTORCH AND PYTEST
+   > python -c "import torch; print(torch.__version__)"
+   > pip install torch pytest    (if missing)
+
+   The base implementation ships alongside this folder in ../operations/
+   (Operation base class + differentiable_enhance.py). Keep the two folders
+   side by side — conftest.py adds the parent directory to sys.path.
+
+
+2. RUN THE TESTS (from inside this folder)
+   > pytest test_differentiable_enhance_only.py -v
+
+   You should see 5 test classes, each running against all ops in DIFF_ENHANCE_OPS.
+   All 30 should pass (green).
+
+
+WHAT YOU HAVE:
+================================================================================
+
+conftest.py
+  ↓ Defines pytest fixtures:
+    - rgb_image: (1, 3, 32, 32) dummy RGB tensor
+    - gray_image: (1, 1, 32, 32) dummy grayscale tensor
+
+test_differentiable_enhance_only.py
+  ↓ Tests for enhance ops:
+    - TestGradientFlow: verifies gradients flow to all params
+    - TestOutputShape: verifies output shape = input shape
+    - TestNoNanInf: verifies finite outputs/gradients
+    - TestConvergence: verifies gradient descent can optimize params
+
+differentiable_enhance.py (YOU COPY THIS)
+  ↓ Base implementation of:
+    - DiffBrightness
+    - DiffContrast
+    - DiffGamma
+    - DiffSaturation
+    - DiffBrightnessAdditive
+
+
+HOW TO ADD YOUR OWN OP:
+================================================================================
+
+1. Implement your op in differentiable_enhance.py:
+
+   class DiffMyNewOp(nn.Module):
+       def __init__(self):
+           super().__init__()
+           self.register_parameter('my_param', nn.Parameter(torch.tensor([1.0])))
+           self.params = {'my_param': self.my_param}
+       
+       def forward(self, x):
+           # Your differentiable computation
+           return x * self.my_param
+       
+       def set_params(self, param_dict):
+           if 'my_param' in param_dict:
+               with torch.no_grad():
+                   self.my_param.copy_(torch.tensor(param_dict['my_param']))
+
+
+2. Add to test suite in test_differentiable_enhance_only.py:
+
+   DIFF_ENHANCE_OPS = [
+       # ... existing ...
+       ("DiffMyNewOp", DiffMyNewOp, {}),  # ← Add this line
+   ]
+
+
+3. Run tests:
+
+   > pytest test_differentiable_enhance_only.py -v
+
+
+COMMON ISSUES:
+================================================================================
+
+Q: "ModuleNotFoundError: No module named 'operations'"
+A: conftest.py adds param_optimizer root to sys.path. Make sure you run pytest
+   from THIS folder, or verify PARAM_OPTIMIZER_ROOT points to the right place.
+
+Q: "param has None gradient"
+A: Your op doesn't use the parameter in forward(). Example:
+   
+   BAD:  def forward(self, x): return x  # param unused!
+   GOOD: def forward(self, x): return x * self.my_param
+
+
+Q: "NaN or Inf in output"
+A: Use clamping to avoid division by zero, log(negative), etc.
+   
+   Example:
+   x_safe = torch.clamp(x, min=1e-6)
+   return torch.log(x_safe)
+
+
+Q: "loss doesn't decrease in convergence test"
+A: Try increasing learning rate in _run_convergence(op, rgb_image, target, lr=0.1)
+   or check that the op is actually modifying the image (not identity function).
+
+
+DEPENDENCIES:
+================================================================================
+
+Required:
+  - PyTorch (torch)
+  - pytest
+
+Install with:
+  pip install torch pytest
+
+
+READING MATERIAL:
+================================================================================
+
+1. README.md — Full guide with examples
+2. test_differentiable_enhance_only.py — Commented test code
+3. differentiable_enhance.py — Reference implementation
