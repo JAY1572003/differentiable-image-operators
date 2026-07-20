@@ -6,3 +6,5 @@ __pycache__/
 *.pages
 *.heic
 *.dmg
+.DS_Store
+tile_crack_pairs/
