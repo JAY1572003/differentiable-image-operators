@@ -1,0 +1,6 @@
+Functional check: response on crack line vs off it (need >= 5x)
+
+DiffFrangi             | on-line=0.0766 | off-line=0.0002 | ratio=500.45x | PASS
+DiffMultiscaleContrast | on-line=0.9955 | off-line=0.1254 | ratio=7.94x | PASS
+DiffMorphologyDisk     | on-line=0.6972 | off-line=0.0000 | ratio=69718915.22x | PASS
+DiffMorphologyLine     | on-line=0.6983 | off-line=0.0000 | ratio=69825822.11x | PASS
