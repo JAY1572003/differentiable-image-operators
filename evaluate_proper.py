@@ -18,14 +18,7 @@ sys.path.insert(0, '.')
 from operators.frangi import DiffFrangi
 from operators.multiscale_contrast import DiffMultiscaleContrast
 from operators.diff_morphology import DiffMorphologyDisk, DiffMorphologyLine
-from operations.losses import BCEDiceLoss
-
-def compute_iou(pred_binary, target_binary):
-    intersection = (pred_binary * target_binary).sum()
-    union = pred_binary.sum() + target_binary.sum() - intersection
-    if union == 0:
-        return 1.0
-    return (intersection / union).item()
+from operations.losses import BCEDiceLoss, compute_iou
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -149,9 +142,14 @@ for name, op in operators:
     print(f"\n{'='*40}")
     print(f"Operator: {name}")
 
-    # Train
-    op = train_operator(op, train_images, train_masks, epochs=200, lr=0.05)
-
+    # Morphology ops converge better with a gentler learning rate and more
+    # epochs (confirmed via debug testing — they were still improving past
+    # epoch 200 at lr=0.05, and DiffMorphologyDisk needed lr=0.05 lowered
+    # to avoid slamming into its parameter boundary).
+    if name in ("DiffMorphologyDisk", "DiffMorphologyLine"):
+        op = train_operator(op, train_images, train_masks, epochs=350, lr=0.01)
+    else:
+        op = train_operator(op, train_images, train_masks, epochs=200, lr=0.05)
     # Evaluate on held-out test images
     iou = evaluate_operator(op, test_images, test_masks)
     results[name] = iou

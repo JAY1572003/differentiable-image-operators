@@ -2,6 +2,14 @@
 DiffMorphologyDisk  - soft disk SE, learnable radius.
 DiffMorphologyLine  - soft line SE, learnable length + angle.
 Uses log-sum-exp dilation/erosion so gradients reach all parameters.
+Interface: kit v2 (1-element param tensors, no per-image normalization).
+
+Temperature constants (fixed, not learnable):
+  _ALPHA = 8.0  -> controls how "hard" the soft structuring element edge is
+                   (sigmoid steepness). Higher = closer to a true binary SE.
+  _TAU   = 8.0  -> controls how close the log-sum-exp dilation/erosion is to
+                   true max/min. Higher = closer to hard morphology, but with
+                   less smooth gradients.
 """
 
 import math
@@ -55,39 +63,51 @@ def _apply_operation(x, se, operation):
 class DiffMorphologyDisk(Operation):
     SUPPORTED_OPS = ['dilation','erosion','opening','closing','gradient','top_hat','bottom_hat']
 
-    def __init__(self, operation='closing', se_size=7):
+    def __init__(self, operation='bottom_hat', se_size=15):
         super().__init__('DiffMorphologyDisk')
         assert operation in self.SUPPORTED_OPS
         self.operation = operation
         self.se_size   = se_size
-        self.params['radius']       = torch.nn.Parameter(torch.tensor(2.0))
+        self.params['radius']       = torch.nn.Parameter(torch.tensor([2.0]))
         self.param_ranges['radius'] = [0.1, se_size/2.0-0.5]
         center = se_size // 2
         coords = torch.arange(se_size, dtype=torch.float32)
         gi, gj = torch.meshgrid(coords, coords, indexing='ij')
         self.register_buffer('dist', torch.sqrt((gi-center)**2 + (gj-center)**2))
 
-    def _get_se(self):
-        r = torch.clamp(self.params['radius'], *self.param_ranges['radius'])
-        return torch.sigmoid(_ALPHA * (r - self.dist))
+    def clamp_params(self):
+        # Override the kit's exact-boundary clamp with a small safety margin.
+        # Clamping exactly at lo/hi gives the param zero gradient there
+        # forever once it drifts past the edge (confirmed: loss and grad
+        # froze identically epoch after epoch). This doesn't touch
+        # operations/operation.py — it's just our own subclass overriding
+        # the method it inherited.
+        with torch.no_grad():
+            for key, p in self.params.items():
+                lo, hi = self.param_ranges[key]
+                margin = (hi - lo) * 0.01
+                p.data.clamp_(lo + margin, hi - margin)
 
+    def _get_se(self):
+        r = self.params['radius']
+        return torch.sigmoid(_ALPHA * (r - self.dist))
     def forward(self, x):
         self.clamp_params()
         out = _apply_operation(x, self._get_se(), self.operation)
-        return (out - out.min()) / (out.max() - out.min() + 1e-8)
+        return torch.clamp(out, 0.0, 1.0)
 
 
 class DiffMorphologyLine(Operation):
     SUPPORTED_OPS = ['dilation','erosion','opening','closing','gradient','top_hat','bottom_hat']
     LINE_WIDTH = 0.8
 
-    def __init__(self, operation='closing', se_size=11):
+    def __init__(self, operation='bottom_hat', se_size=11):
         super().__init__('DiffMorphologyLine')
         assert operation in self.SUPPORTED_OPS
         self.operation = operation
         self.se_size   = se_size
-        self.params['length']       = torch.nn.Parameter(torch.tensor(3.0))
-        self.params['angle']        = torch.nn.Parameter(torch.tensor(math.pi/4.0))
+        self.params['length']       = torch.nn.Parameter(torch.tensor([3.0]))
+        self.params['angle']        = torch.nn.Parameter(torch.tensor([math.pi/4.0]))
         self.param_ranges['length'] = [0.5, float(se_size//2)]
         self.param_ranges['angle']  = [0.0, math.pi]
         center = se_size // 2
@@ -96,9 +116,17 @@ class DiffMorphologyLine(Operation):
         self.register_buffer('gi', gi)
         self.register_buffer('gj', gj)
 
+    def clamp_params(self):
+        # Same override as DiffMorphologyDisk — see comment there.
+        with torch.no_grad():
+            for key, p in self.params.items():
+                lo, hi = self.param_ranges[key]
+                margin = (hi - lo) * 0.01
+                p.data.clamp_(lo + margin, hi - margin)
+
     def _get_se(self):
-        length = torch.clamp(self.params['length'], *self.param_ranges['length'])
-        angle  = torch.clamp(self.params['angle'],  *self.param_ranges['angle'])
+        length = self.params['length']
+        angle  = self.params['angle']
         cos_a, sin_a = torch.cos(angle), torch.sin(angle)
         u = self.gj * cos_a + self.gi * sin_a
         v = -self.gj * sin_a + self.gi * cos_a
@@ -108,4 +136,4 @@ class DiffMorphologyLine(Operation):
     def forward(self, x):
         self.clamp_params()
         out = _apply_operation(x, self._get_se(), self.operation)
-        return (out - out.min()) / (out.max() - out.min() + 1e-8)
+        return torch.clamp(out, 0.0, 1.0)
