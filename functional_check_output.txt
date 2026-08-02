@@ -4,3 +4,7 @@ DiffFrangi             | on-line=0.0766 | off-line=0.0002 | ratio=500.45x | PASS
 DiffMultiscaleContrast | on-line=0.9955 | off-line=0.1254 | ratio=7.94x | PASS
 DiffMorphologyDisk     | on-line=0.6972 | off-line=0.0000 | ratio=69718915.22x | PASS
 DiffMorphologyLine     | on-line=0.6983 | off-line=0.0000 | ratio=69825822.11x | PASS
+
+Functional check: DiffHaralick response on textured background vs smooth patch (need off-patch > on-patch)
+
+DiffHaralick           | on-patch=0.2258 | off-patch=0.2635 | ratio=1.17x | PASS

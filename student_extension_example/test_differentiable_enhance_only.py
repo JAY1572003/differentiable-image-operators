@@ -22,7 +22,7 @@ from operations.differentiable_enhance import (
 from operators.frangi import DiffFrangi
 from operators.multiscale_contrast import DiffMultiscaleContrast
 from operators.diff_morphology import DiffMorphologyDisk, DiffMorphologyLine
-
+from operators.haralick import DiffHaralick
 
 # ============================================================
 # Helpers
@@ -294,4 +294,81 @@ class TestConvergence:
         assert final_loss < initial_loss * 0.5, (
             f"DiffMorphologyLine (start_angle={start_angle}): loss didn't converge. "
             f"Initial: {initial_loss:.6f}, Final: {final_loss:.6f}"
+        )
+
+        # ============================================================
+# 5. DiffHaralick — dedicated tests
+#
+# DiffHaralick outputs 3 channels (contrast/homogeneity/energy) regardless
+# of input channel count, an intentional deviation from the other operators'
+# "output shape == input shape" convention (see README). It doesn't fit the
+# shared DIFF_ENHANCE_OPS parametrization cleanly, so it gets its own tests
+# here, covering the same categories as the others.
+# ============================================================
+
+class TestDiffHaralick:
+
+    def test_has_learnable_params(self):
+        op = DiffHaralick()
+        assert len(list(op.parameters())) > 0, (
+            "DiffHaralick: no nn.Parameter found."
+        )
+        assert hasattr(op, 'params') and len(op.params) == 4, (
+            "DiffHaralick: expected 4 params (softness, displacement, angle, scale)."
+        )
+
+    def test_gradient_flow(self, gray_image):
+        op = DiffHaralick()
+        op.zero_grad()
+        img = gray_image.clone().detach().requires_grad_(True)
+        out = op(img)
+        out.sum().backward()
+        for name, p in op.params.items():
+            assert p.grad is not None, f"DiffHaralick: param '{name}' has None gradient."
+            assert p.grad.abs().sum() > 0, f"DiffHaralick: param '{name}' has all-zero gradient."
+
+    def test_output_shape(self, gray_image):
+        op = DiffHaralick()
+        out = op(gray_image)
+        B, C, H, W = gray_image.shape
+        assert out.shape == (B, 3, H, W), (
+            f"DiffHaralick: expected shape {(B, 3, H, W)} (3 texture-stat "
+            f"channels, spatial dims unchanged), got {out.shape}"
+        )
+
+    def test_output_finite(self, gray_image):
+        op = DiffHaralick()
+        out = op(gray_image)
+        assert torch.isfinite(out).all(), "DiffHaralick: output contains NaN or Inf"
+
+    def test_gradients_finite(self, gray_image):
+        op = DiffHaralick()
+        op.zero_grad()
+        img = gray_image.clone().detach().requires_grad_(True)
+        out = op(img)
+        out.sum().backward()
+        for name, p in op.params.items():
+            if p.grad is not None:
+                assert torch.isfinite(p.grad).all(), f"DiffHaralick: param '{name}' has NaN/Inf gradient"
+
+    def test_convergence(self):
+        # Random noise gives displacement/angle a weak, ambiguous signal
+        # (same issue found with DiffMorphologyLine's angle test) -- use a
+        # striped synthetic image instead, which has real, learnable
+        # spatial structure for a displacement/angle parameter to key off.
+        size = 48
+        coords = torch.arange(size, dtype=torch.float32)
+        stripes = (torch.sin(coords * 0.8).unsqueeze(0) * 0.4 + 0.5)
+        img = stripes.expand(size, size).unsqueeze(0).unsqueeze(0).clone()
+
+        op = DiffHaralick()
+        op.set_params({'displacement': [2.0], 'angle': [0.2]})
+        with torch.no_grad():
+            target_op = DiffHaralick()
+            target_op.set_params({'displacement': [4.0], 'angle': [1.4]})
+            target = target_op(img)
+        initial_loss, final_loss = _run_convergence(op, img, target,
+                                                     max_epochs=150, lr=0.03)
+        assert final_loss < initial_loss * 0.5, (
+            f"DiffHaralick: loss didn't converge. Initial: {initial_loss:.6f}, Final: {final_loss:.6f}"
         )

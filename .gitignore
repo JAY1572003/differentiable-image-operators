@@ -8,3 +8,4 @@ __pycache__/
 *.dmg
 .DS_Store
 tile_crack_pairs/
+carpet_cut_pairs/
