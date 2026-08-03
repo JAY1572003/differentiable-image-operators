@@ -2,6 +2,7 @@
 
 Delivered per `integration_spec.md`. Covers Priority A (4 operators, kit v2
 interface) and Priority B (DiffHaralick) — see below.
+
 ## Operators
 
 ### DiffFrangi
@@ -74,13 +75,13 @@ mean response ON the line is >= 5x the mean response OFF the line.
 
 ```
 Functional check: response on crack line vs off it (need >= 5x)
-DiffFrangi | on-line=0.0766 | off-line=0.0002 | ratio=500.45x | PASS
+DiffFrangi             | on-line=0.0766 | off-line=0.0002 | ratio=500.45x | PASS
 DiffMultiscaleContrast | on-line=0.9955 | off-line=0.1254 | ratio=7.94x | PASS
-DiffMorphologyDisk | on-line=0.6972 | off-line=0.0000 | ratio=69718915.22x | PASS
-DiffMorphologyLine | on-line=0.6983 | off-line=0.0000 | ratio=69825822.11x | PASS
+DiffMorphologyDisk     | on-line=0.6972 | off-line=0.0000 | ratio=69718915.22x | PASS
+DiffMorphologyLine     | on-line=0.6983 | off-line=0.0000 | ratio=69825822.11x | PASS
 
 Functional check: DiffHaralick response on textured background vs smooth patch (need off-patch > on-patch)
-DiffHaralick | on-patch=0.2258 | off-patch=0.2635 | ratio=1.17x | PASS
+DiffHaralick           | on-patch=0.2258 | off-patch=0.2635 | ratio=1.17x | PASS
 ```
 
 All 5 operators pass.
@@ -160,10 +161,9 @@ test_differentiable_enhance_only.py::TestDiffHaralick::test_gradient_flow PASSED
 test_differentiable_enhance_only.py::TestDiffHaralick::test_output_shape PASSED [ 95%]
 test_differentiable_enhance_only.py::TestDiffHaralick::test_output_finite PASSED [ 96%]
 test_differentiable_enhance_only.py::TestDiffHaralick::test_gradients_finite PASSED [ 98%]
-test_differentiable_enhance_only.py::TestDiffHaralick::test_convergence PASSED [ 100%]
+test_differentiable_enhance_only.py::TestDiffHaralick::test_convergence PASSED [100%]
 
 ============== 62 passed in 2.32s ===============
-```
 ```
 
 ## Priority B — DiffHaralick
@@ -195,7 +195,7 @@ Soft-binning direction, as specified:
 |---|---|---|
 | softness | [0.03, 0.15] | 0.15 |
 | displacement | [1.5, 5.0] | 1.5 |
-| angle | [0.0, π] | 0.3 |
+| angle | [0.0, pi] | 0.3 |
 | scale | [1.0, 20.0] | 5.0 |
 
 Note: output is 3 channels (contrast/homogeneity/energy), not 1 -- an
@@ -216,7 +216,6 @@ output, which lowers the loss without learning anything real.
 2. `displacement` collapsed toward ~0 (comparing a pixel to itself, which
    trivially gives near-zero contrast) -- fixed by raising its minimum to
    1.5 px, and increasing `BCEDiceLoss`'s `pos_weight` from 6 to 15.
-
 
 ### Results
 
